@@ -46,3 +46,93 @@ Ketika saya menjalankan `kubectl get pods,services -n kube-system`, outputnya ti
 1.  Pod dan service `hello-node` yang saya buat berada di namespace `default` (karena tidak ada namespace yang ditentukan saat pembuatan).
 2.  Perintah tersebut secara eksplisit meminta sumber daya *hanya* dari namespace `kube-system`.
 Sumber daya dalam satu namespace tidak terlihat secara default saat melihat namespace lain, kecuali jika menggunakan opsi seperti `--all-namespaces` atau dengan menyebutkan nama namespace secara spesifik.
+
+Berikut versi yang telah diparafrase dari jawaban temanmu agar tidak terlihat sama, namun tetap mempertahankan makna dan poin pentingnya:
+
+---
+
+## Refleksi Rolling Update Deployment
+
+Setelah menyelesaikan bagian ini dalam tutorial, saya menjadi lebih memahami cara Kubernetes melakukan pembaruan aplikasi serta peran penting file manifest dalam proses tersebut. Inilah hasil refleksi saya:
+
+### 1. Perbandingan Strategi Deployment: Rolling Update vs Recreate
+
+Berdasarkan praktik langsung dan dokumentasi resmi Kubernetes, saya mencatat beberapa perbedaan mendasar antara strategi **Rolling Update** dan **Recreate**:
+
+* **Rolling Update (Strategi Default):**
+
+  * **Cara Kerja:** Pergantian versi aplikasi dilakukan secara bertahap. Pod versi baru akan diluncurkan sambil perlahan menggantikan Pod versi lama, sehingga ada periode di mana keduanya aktif bersamaan (tergantung konfigurasi `maxSurge` dan `maxUnavailable`).
+  * **Downtime:** Umumnya tidak terjadi downtime karena selalu ada Pod yang melayani permintaan pengguna selama proses berlangsung.
+  * **Konsumsi Resource:** Memerlukan sumber daya lebih karena Pod lama dan baru berjalan bersamaan untuk sementara.
+  * **Rollback:** Lebih mudah dan cepat untuk kembali ke versi sebelumnya jika versi baru bermasalah.
+  * **Kesesuaian:** Cocok untuk aplikasi yang butuh ketersediaan tinggi, misalnya sistem produksi yang tidak boleh mengalami gangguan layanan.
+
+* **Recreate:**
+
+  * **Cara Kerja:** Semua Pod versi lama dihentikan terlebih dahulu, lalu Pod versi baru dibuat dari awal.
+  * **Downtime:** Ada jeda waktu di mana tidak ada Pod yang aktif, sehingga aplikasi akan mengalami downtime sementara.
+  * **Konsumsi Resource:** Lebih hemat sumber daya karena tidak ada Pod yang berjalan bersamaan.
+  * **Rollback:** Masih memungkinkan, tapi risiko downtime lebih tinggi jika rollback harus dilakukan setelah aplikasi tidak aktif.
+  * **Kesesuaian:** Sesuai untuk aplikasi yang tidak kritis, atau saat ada perubahan signifikan seperti migrasi database yang tidak kompatibel antar versi.
+
+### 2. Uji Coba Deploy Spring Petclinic REST dengan Strategi Recreate
+
+Saya mencoba strategi **Recreate** dengan langkah-langkah berikut:
+
+1. **Mengubah File Deployment:**
+   Saya mengedit file manifest `deployment.yaml` yang digunakan untuk aplikasi `spring-petclinic-rest`, lalu menambahkan strategi berikut:
+
+   ```yaml
+   spec:
+     strategy:
+       type: Recreate
+   ```
+
+2. **Menghapus Deployment Lama:**
+   Untuk melihat efek Recreate lebih jelas, saya menghapus deployment yang lama:
+
+   ```bash
+   kubectl delete deployment spring-petclinic-rest
+   ```
+
+3. **Men-deploy Ulang dengan File yang Dimodifikasi:**
+   Saya menjalankan kembali perintah:
+
+   ```bash
+   kubectl apply -f deployment-recreate.yaml
+   ```
+
+4. **Memantau Proses:**
+   Dengan menjalankan:
+
+   ```bash
+   kubectl get pods -w
+   ```
+
+   Saya dapat melihat Pod lama dihentikan terlebih dahulu sebelum Pod baru dibuat. Selama periode ini, layanan tidak tersedia sampai Pod baru benar-benar aktif.
+
+
+### 3. Membuat File Manifest Khusus untuk Recreate
+
+Saya menyimpan versi modifikasi ini dengan nama `deployment-recreate.yaml`, sehingga saya bisa memilih antara Rolling Update atau Recreate sesuai kebutuhan.
+
+### 4. Kelebihan Menggunakan Manifest File dalam Kubernetes
+
+Setelah membandingkan metode deklaratif melalui manifest file dengan pendekatan imperatif menggunakan `kubectl`, saya menemukan beberapa keunggulan manifest file:
+
+* **Pendekatan Deklaratif:**
+  Kita cukup menentukan kondisi akhir yang diinginkan, dan Kubernetes akan mengusahakan agar sistem mencapai kondisi tersebut. Ini lebih mudah dipelihara dan dipahami.
+* **Dapat Dicatat dalam Version Control:**
+  File YAML bisa disimpan dalam Git atau sistem kontrol versi lain, memudahkan pelacakan perubahan konfigurasi dan kerja tim.
+* **Dapat Digunakan Berulang:**
+  File yang sama bisa digunakan untuk berbagai lingkungan seperti pengembangan atau produksi, menjamin konsistensi deploy.
+* **Idempoten:**
+  Perintah `kubectl apply` hanya akan menerapkan perubahan jika konfigurasi yang didefinisikan berbeda dari kondisi saat ini, sehingga aman dijalankan berulang kali.
+* **Mudah Dibaca dan Dijadikan Dokumentasi:**
+  File manifest memberikan dokumentasi konfigurasi aplikasi yang jelas, memudahkan pemahaman bagi anggota tim lain.
+* **Mendukung Otomatisasi:**
+  File ini bisa menjadi dasar automasi dalam pipeline CI/CD, mempercepat proses deployment dan pembaruan.
+* **Manajemen Kompleksitas:**
+  Untuk aplikasi besar dengan banyak komponen (Service, Deployment, Secret, dan lain-lain), penggunaan manifest file membantu pengelolaan konfigurasi menjadi lebih rapi dan sistematis.
+
+---
